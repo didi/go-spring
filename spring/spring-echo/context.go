@@ -18,7 +18,6 @@ package SpringEcho
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -27,28 +26,31 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/go-spring/spring-const"
-	"github.com/go-spring/spring-web"
+	"github.com/go-spring/spring-core/validator"
+	"github.com/go-spring/spring-core/web"
+	"github.com/go-spring/spring-stl/json"
+	"github.com/go-spring/spring-stl/knife"
+	"github.com/go-spring/spring-stl/util"
 	"github.com/labstack/echo"
 )
 
-// EchoContext 将 SpringWeb.Context 转换为 echo.Context
-func EchoContext(ctx SpringWeb.Context) echo.Context {
+// EchoContext 将 web.Context 转换为 echo.Context
+func EchoContext(ctx web.Context) echo.Context {
 	return ctx.NativeContext().(echo.Context)
 }
 
-// WebContext 将 echo.Context 转换为 SpringWeb.Context
-func WebContext(echoCtx echo.Context) SpringWeb.Context {
-	if ctx := echoCtx.Get(SpringWeb.ContextKey); ctx != nil {
-		return ctx.(SpringWeb.Context)
+// WebContext 将 echo.Context 转换为 web.Context
+func WebContext(echoCtx echo.Context) web.Context {
+	if ctx := echoCtx.Get(web.ContextKey); ctx != nil {
+		return ctx.(web.Context)
 	}
 	return nil
 }
 
-// 同时继承了 SpringWeb.ResponseWriter 接口
+// 同时继承了 web.ResponseWriter 接口
 type responseWriter struct {
 	response *echo.Response
-	writer   *SpringWeb.BufferedResponseWriter
+	writer   *web.BufferedResponseWriter
 }
 
 func (w *responseWriter) Header() http.Header {
@@ -82,17 +84,23 @@ type Context struct {
 	echoContext echo.Context
 
 	// handlerFunc Web 处理函数
-	handlerFunc SpringWeb.Handler
+	handlerFunc web.Handler
 
 	// wildCardName 通配符的名称
 	wildCardName string
 }
 
 // NewContext Context 的构造函数
-func NewContext(fn SpringWeb.Handler, wildCardName string, echoCtx echo.Context) *Context {
+func NewContext(fn web.Handler, wildCardName string, echoCtx echo.Context) *Context {
+
+	{
+		req := echoCtx.Request()
+		ctx := knife.New(req.Context())
+		echoCtx.SetRequest(req.WithContext(ctx))
+	}
 
 	echoCtx.Response().Writer = &responseWriter{
-		writer: &SpringWeb.BufferedResponseWriter{
+		writer: &web.BufferedResponseWriter{
 			ResponseWriter: echoCtx.Response().Writer,
 		},
 		response: echoCtx.Response(),
@@ -104,23 +112,13 @@ func NewContext(fn SpringWeb.Handler, wildCardName string, echoCtx echo.Context)
 		wildCardName: wildCardName,
 	}
 
-	ctx.Set(SpringWeb.ContextKey, ctx)
+	echoCtx.Set(web.ContextKey, ctx)
 	return ctx
 }
 
 // NativeContext 返回封装的底层上下文对象
 func (ctx *Context) NativeContext() interface{} {
 	return ctx.echoContext
-}
-
-// Get retrieves data from the context.
-func (ctx *Context) Get(key string) interface{} {
-	return ctx.echoContext.Get(key)
-}
-
-// Set saves data in the context.
-func (ctx *Context) Set(key string, val interface{}) {
-	ctx.echoContext.Set(key, val)
 }
 
 // Request returns `*http.Request`.
@@ -164,7 +162,7 @@ func (ctx *Context) Path() string {
 }
 
 // Handler returns the matched handler by router.
-func (ctx *Context) Handler() SpringWeb.Handler {
+func (ctx *Context) Handler() web.Handler {
 	return ctx.handlerFunc
 }
 
@@ -288,11 +286,11 @@ func (ctx *Context) Bind(i interface{}) error {
 	if err := ctx.echoContext.Bind(i); err != nil {
 		return err
 	}
-	return SpringWeb.Validate(i)
+	return validator.Validate(i)
 }
 
 // ResponseWriter returns `http.ResponseWriter`.
-func (ctx *Context) ResponseWriter() SpringWeb.ResponseWriter {
+func (ctx *Context) ResponseWriter() web.ResponseWriter {
 	return ctx.echoContext.Response().Writer.(*responseWriter)
 }
 
@@ -348,7 +346,7 @@ func (ctx *Context) JSON(i interface{}) {
 	if err != nil {
 		panic(err)
 	}
-	ctx.Blob(SpringWeb.MIMEApplicationJSONCharsetUTF8, b)
+	ctx.Blob(web.MIMEApplicationJSONCharsetUTF8, b)
 }
 
 // JSONPretty sends a pretty-print JSON.
@@ -357,7 +355,7 @@ func (ctx *Context) JSONPretty(i interface{}, indent string) {
 	if err != nil {
 		panic(err)
 	}
-	ctx.Blob(SpringWeb.MIMEApplicationJSONCharsetUTF8, b)
+	ctx.Blob(web.MIMEApplicationJSONCharsetUTF8, b)
 }
 
 // JSONBlob sends a JSON blob response.
@@ -446,5 +444,5 @@ func (ctx *Context) Redirect(code int, url string) {
 
 // SSEvent writes a Server-Sent Event into the body stream.
 func (ctx *Context) SSEvent(name string, message interface{}) {
-	panic(SpringConst.UnimplementedMethod)
+	panic(util.UnimplementedMethod)
 }

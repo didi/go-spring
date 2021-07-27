@@ -19,33 +19,36 @@ package StarterRabbitMQConsumer
 import (
 	"context"
 
-	"github.com/go-spring/spring-core/boot"
+	"github.com/go-spring/spring-core/gs"
 	"github.com/go-spring/spring-core/log"
 	"github.com/go-spring/spring-core/mq"
-	"github.com/go-spring/starter-rabbitmq"
+	"github.com/go-spring/spring-stl/util"
+	"github.com/go-spring/starter-rabbitmq/server"
 )
 
 func init() {
-	boot.RegisterNameBean("amqp-consumer-starter", new(Starter)).
-		Export((*boot.ApplicationEvent)(nil))
+	gs.Object(new(Starter)).Name("amqp-consumer-starter").Export(gs.AppEvent)
 }
 
 type Starter struct {
-	Server *StarterRabbitMQ.AMQPServer `autowire:""`
+	Server *StarterRabbitMQServer.AMQPServer `autowire:""`
 }
 
-func (starter *Starter) OnStartApplication(ctx boot.ApplicationContext) {
+func (starter *Starter) OnStartApp(ctx gs.AppContext) {
 
 	cMap := map[string][]mq.Consumer{}
 	{
 		var consumers []mq.Consumer
-		_ = boot.CollectBeans(&consumers)
+		err := ctx.Get(&consumers)
+		util.Panic(err).When(err != nil)
 
-		for _, c := range boot.BindConsumerMapping {
-			if c.CheckCondition(ctx) {
-				consumers = append(consumers, c)
-			}
-		}
+		var bindConsumers *gs.Consumers
+		err = ctx.Get(&bindConsumers)
+		util.Panic(err).When(err != nil)
+
+		bindConsumers.ForEach(func(c mq.Consumer) {
+			consumers = append(consumers, c)
+		})
 
 		for _, consumer := range consumers {
 			for _, topic := range consumer.Topics() {
@@ -79,6 +82,6 @@ func (starter *Starter) OnStartApplication(ctx boot.ApplicationContext) {
 	}()
 }
 
-func (starter *Starter) OnStopApplication(ctx boot.ApplicationContext) {
+func (starter *Starter) OnStopApp(ctx gs.AppContext) {
 
 }

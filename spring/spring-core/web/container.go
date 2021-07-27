@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
-// 为社区优秀的 Web 服务器提供一个抽象层，使得底层可以灵活切换。
+// Package web 为社区优秀的 Web 服务器提供一个抽象层，使得底层可以灵活切换。
 package web
 
 import (
 	"context"
 	"fmt"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/go-spring/spring-core/log"
-	"github.com/go-spring/spring-core/util"
+	"github.com/go-spring/spring-stl/util"
 )
 
 // HandlerFunc 标准 Web 处理函数
@@ -32,6 +33,7 @@ type HandlerFunc func(Context)
 
 // Handler 标准 Web 处理接口
 type Handler interface {
+
 	// Invoke 响应函数
 	Invoke(Context)
 
@@ -54,8 +56,7 @@ type ContainerConfig struct {
 
 // Container Web 容器
 type Container interface {
-	// RootRouter 根路由
-	RootRouter
+	Router
 
 	// Config 获取 Web 容器配置
 	Config() ContainerConfig
@@ -66,17 +67,11 @@ type Container interface {
 	// AddFilter 添加过滤器
 	AddFilter(filter ...Filter)
 
-	// SetFilters 设置过滤器列表
-	SetFilters(filters []Filter)
-
 	// GetLoggerFilter 获取 Logger Filter
 	GetLoggerFilter() Filter
 
 	// SetLoggerFilter 设置 Logger Filter
 	SetLoggerFilter(filter Filter)
-
-	// AddRouter 添加新的路由信息
-	AddRouter(router RootRouter)
 
 	// Swagger 设置与容器绑定的 Swagger 对象
 	Swagger(swagger Swagger)
@@ -90,7 +85,7 @@ type Container interface {
 
 // AbstractContainer 抽象的 Container 实现
 type AbstractContainer struct {
-	RootRouter
+	router
 
 	config  ContainerConfig // 容器配置项
 	filters []Filter        // 其他过滤器
@@ -100,7 +95,7 @@ type AbstractContainer struct {
 
 // NewAbstractContainer AbstractContainer 的构造函数
 func NewAbstractContainer(config ContainerConfig) *AbstractContainer {
-	return &AbstractContainer{RootRouter: NewRootRouter(), config: config}
+	return &AbstractContainer{config: config}
 }
 
 // Address 返回监听地址
@@ -123,26 +118,17 @@ func (c *AbstractContainer) AddFilter(filter ...Filter) {
 	c.filters = append(c.filters, filter...)
 }
 
-// SetFilters 设置过滤器列表
-func (c *AbstractContainer) SetFilters(filters []Filter) {
-	c.filters = filters
-}
-
 // GetLoggerFilter 获取 Logger Filter
 func (c *AbstractContainer) GetLoggerFilter() Filter {
-	return c.logger
+	if c.logger != nil {
+		return c.logger
+	}
+	return defaultLoggerFilter
 }
 
 // SetLoggerFilter 设置 Logger Filter
 func (c *AbstractContainer) SetLoggerFilter(filter Filter) {
 	c.logger = filter
-}
-
-// AddRouter 添加新的路由信息
-func (c *AbstractContainer) AddRouter(router RootRouter) {
-	for _, mapper := range router.Mappers() {
-		c.AddMapper(mapper)
-	}
 }
 
 // Swagger 设置与容器绑定的 Swagger 对象
@@ -151,7 +137,7 @@ func (c *AbstractContainer) Swagger(swagger Swagger) {
 }
 
 // SwaggerHandler Swagger 处理器
-type SwaggerHandler func(router RootRouter, doc string)
+type SwaggerHandler func(router Router, doc string)
 
 // swaggerHandler Swagger 处理器
 var swaggerHandler SwaggerHandler
@@ -163,29 +149,36 @@ func RegisterSwaggerHandler(handler SwaggerHandler) {
 
 // Start 启动 Web 容器
 func (c *AbstractContainer) Start() error {
+
 	if c.swagger != nil && swaggerHandler != nil {
 		for _, mapper := range c.Mappers() {
-			if op := mapper.op; op != nil {
-				if err := op.Process(); err != nil {
-					return err
-				}
-				c.swagger.AddPath(mapper.Path(), mapper.Method(), op)
+			if mapper.swagger == nil {
+				continue
+			}
+			if err := mapper.swagger.Process(); err != nil {
+				return err
+			}
+			for _, method := range GetMethod(mapper.Method()) {
+				c.swagger.AddPath(mapper.Path(), method, mapper.swagger)
 			}
 		}
-		swaggerHandler(c.RootRouter, c.swagger.ReadDoc())
+		swaggerHandler(&c.router, c.swagger.ReadDoc())
 	}
+
+	for _, mapper := range c.Mappers() {
+		log.Infof("%v :%d %s -> %s:%d %s", func() []interface{} {
+			method := GetMethod(mapper.method)
+			file, line, fnName := mapper.handler.FileLine()
+			return log.T(method, c.config.Port, mapper.path, file, line, fnName)
+		})
+	}
+
 	return nil
 }
 
 // Stop 停止 Web 容器
 func (c *AbstractContainer) Stop(ctx context.Context) error {
 	panic(util.UnimplementedMethod)
-}
-
-// PrintMapper 打印路由注册信息
-func (c *AbstractContainer) PrintMapper(m *Mapper) {
-	file, line, fnName := m.handler.FileLine()
-	log.Infof("%v :%d %s -> %s:%d %s", GetMethod(m.method), c.config.Port, m.path, file, line, fnName)
 }
 
 /////////////////// Invoke Handler //////////////////////
@@ -215,30 +208,49 @@ func (f fnHandler) FileLine() (file string, line int, fnName string) {
 // FUNC 标准 Web 处理函数的辅助函数
 func FUNC(fn HandlerFunc) Handler { return fnHandler(fn) }
 
-// httpHandler 标准 Http 处理函数
-type httpHandler http.HandlerFunc
+// httpFuncHandler 标准 Http 处理函数
+type httpFuncHandler http.HandlerFunc
 
-func (h httpHandler) Invoke(ctx Context) {
+func (h httpFuncHandler) Invoke(ctx Context) {
 	h(ctx.ResponseWriter(), ctx.Request())
 }
 
-func (h httpHandler) FileLine() (file string, line int, fnName string) {
+func (h httpFuncHandler) FileLine() (file string, line int, fnName string) {
 	return util.FileLine(h)
 }
 
 // HTTP 标准 Http 处理函数的辅助函数
-func HTTP(fn http.HandlerFunc) Handler { return httpHandler(fn) }
+func HTTP(fn http.HandlerFunc) Handler {
+	return httpFuncHandler(fn)
+}
 
 // WrapF 标准 Http 处理函数的辅助函数
-func WrapF(fn http.HandlerFunc) Handler { return httpHandler(fn) }
+func WrapF(fn http.HandlerFunc) Handler {
+	return httpFuncHandler(fn)
+}
+
+// httpHandler 标准 Http 处理函数
+type httpHandler struct{ http.Handler }
+
+func (h httpHandler) Invoke(ctx Context) {
+	h.Handler.ServeHTTP(ctx.ResponseWriter(), ctx.Request())
+}
+
+func (h httpHandler) FileLine() (file string, line int, fnName string) {
+	t := reflect.TypeOf(h.Handler)
+	m, _ := t.MethodByName("ServeHTTP")
+	return util.FileLine(m.Func.Interface())
+}
 
 // WrapH 标准 Http 处理函数的辅助函数
-func WrapH(h http.Handler) Handler { return httpHandler(h.ServeHTTP) }
+func WrapH(h http.Handler) Handler {
+	return &httpHandler{h}
+}
 
 /////////////////// Web Filters //////////////////////
 
-// LoggerFilter 全局的日志过滤器，Container 如果没有设置日志过滤器则会使用全局的日志过滤器
-var LoggerFilter = Filter(FuncFilter(func(ctx Context, chain FilterChain) {
+// defaultLoggerFilter 全局的日志过滤器，Container 如果没有设置日志过滤器则会使用全局的日志过滤器
+var defaultLoggerFilter = Filter(FuncFilter(func(ctx Context, chain FilterChain) {
 	start := time.Now()
 	chain.Next(ctx)
 	w := ctx.ResponseWriter()

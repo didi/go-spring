@@ -21,37 +21,35 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/go-spring/spring-core/util"
-	"github.com/spf13/cast"
+	"github.com/go-spring/spring-stl/cast"
+	"github.com/go-spring/spring-stl/util"
 )
 
 var converters = map[reflect.Type]interface{}{}
 
 func init() {
 
-	// time.Duration 转换函数，支持 "ns", "us" (or "µs"), "ms", "s", "m", "h"。
-	Convert(func(s string) (time.Duration, error) { return cast.ToDurationE(s) })
-
 	// time.Time 转换函数，支持非常多的日期格式，参见 cast.StringToDate()。
 	Convert(func(s string) (time.Time, error) { return cast.ToTimeE(s) })
-}
 
-var errorType = reflect.TypeOf((*error)(nil)).Elem()
+	// time.Duration 转换函数，支持 "ns", "us" (or "µs"), "ms", "s", "m", "h" 等。
+	Convert(func(s string) (time.Duration, error) { return cast.ToDurationE(s) })
+}
 
 func validConverter(t reflect.Type) bool {
 	return t.Kind() == reflect.Func &&
 		t.NumIn() == 1 &&
 		t.In(0).Kind() == reflect.String &&
 		t.NumOut() == 2 &&
-		util.IsValueType(t.Out(0).Kind()) &&
-		t.Out(1) == errorType
+		util.IsValueType(t.Out(0)) &&
+		util.IsErrorType(t.Out(1))
 }
 
-// Convert 添加类型转换器，函数原型 func(string)(type,error)
+// Convert 注册类型转换器，转换器的函数原型为 func(string)(type,error) 。
 func Convert(fn interface{}) {
-	if t := reflect.TypeOf(fn); validConverter(t) {
-		converters[t.Out(0)] = fn
-		return
+	t := reflect.TypeOf(fn)
+	if !validConverter(t) {
+		panic(errors.New("fn must be func(string)(type,error)"))
 	}
-	panic(errors.New("fn must be func(string)(type,error)"))
+	converters[t.Out(0)] = fn
 }

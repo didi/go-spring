@@ -18,9 +18,11 @@ package web_test
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/go-spring/spring-core/web"
+	"github.com/go-spring/spring-stl/util"
 )
 
 func TestFuncFilter(t *testing.T) {
@@ -35,4 +37,20 @@ func TestFuncFilter(t *testing.T) {
 	}))
 
 	web.NewDefaultFilterChain([]web.Filter{funcFilter, handlerFilter}).Next(nil)
+}
+
+type Counter struct{}
+
+func (ctr *Counter) ServeHTTP(http.ResponseWriter, *http.Request) {}
+
+func TestWrapH(t *testing.T) {
+
+	c := &Counter{}
+	fmt.Println(util.FileLine(c.ServeHTTP))
+
+	var h http.Handler
+	h = &Counter{}
+	fmt.Println(util.FileLine(h.ServeHTTP))
+
+	fmt.Println(web.WrapH(&Counter{}).FileLine())
 }

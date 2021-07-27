@@ -13,12 +13,6 @@
         <branch>master</branch>
     </project>
     <project>
-        <name>spring-core</name>
-        <dir>spring/spring-core</dir>
-        <url>https://github.com/go-spring/spring-core.git</url>
-        <branch>master</branch>
-    </project>
-    <project>
         <name>starter-web</name>
         <dir>starter/starter-web</dir>
         <url>https://github.com/go-spring/starter-web.git</url>
@@ -37,27 +31,9 @@
         <branch>master</branch>
     </project>
     <project>
-        <name>starter-redis</name>
-        <dir>starter/starter-redis</dir>
-        <url>https://github.com/go-spring/starter-redis.git</url>
-        <branch>master</branch>
-    </project>
-    <project>
         <name>starter-go-redis</name>
         <dir>starter/starter-go-redis</dir>
         <url>https://github.com/go-spring/starter-go-redis.git</url>
-        <branch>master</branch>
-    </project>
-    <project>
-        <name>starter-db</name>
-        <dir>starter/starter-db</dir>
-        <url>https://github.com/go-spring/starter-db.git</url>
-        <branch>master</branch>
-    </project>
-    <project>
-        <name>starter-mongo</name>
-        <dir>starter/starter-mongo</dir>
-        <url>https://github.com/go-spring/starter-mongo.git</url>
         <branch>master</branch>
     </project>
     <project>
@@ -95,5 +71,23 @@
         <dir>starter/starter-core</dir>
         <url>https://github.com/go-spring/starter-core.git</url>
         <branch>main</branch>
+    </project>
+    <project>
+        <name>spring-stl</name>
+        <dir>spring/spring-stl</dir>
+        <url>https://github.com/go-spring/spring-stl.git</url>
+        <branch>main</branch>
+    </project>
+    <project>
+        <name>spring-rabbitmq</name>
+        <dir>spring/spring-rabbitmq</dir>
+        <url>https://github.com/go-spring/spring-rabbitmq.git</url>
+        <branch>master</branch>
+    </project>
+    <project>
+        <name>spring-core</name>
+        <dir>spring/spring-core</dir>
+        <url>https://github.com/go-spring/spring-core.git</url>
+        <branch>master</branch>
     </project>
 </projects>

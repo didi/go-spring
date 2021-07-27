@@ -20,7 +20,8 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/go-spring/spring-core/util"
+	"github.com/go-spring/spring-stl/errors"
+	"github.com/go-spring/spring-stl/util"
 )
 
 var (
@@ -81,7 +82,7 @@ func (r RpcError) ErrorWithData(err error, data interface{}) *RpcResult {
 
 // error skip 是相对于当前函数的调用深度
 func (r RpcError) error(skip int, err error, data interface{}) *RpcResult {
-	str := util.ErrorWithFileLine(err, skip+1).Error()
+	str := errors.WithFileLine(err, skip+1).Error()
 	return &RpcResult{ErrorCode: ErrorCode(r), Err: str, Data: data}
 }
 
